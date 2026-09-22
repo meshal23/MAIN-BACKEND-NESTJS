@@ -67,3 +67,5 @@ skills-lock.json
 
 # Generated Arcjet documentation guides
 ARCJET_*.md
+.prisma-composer/
+.alchemy/
