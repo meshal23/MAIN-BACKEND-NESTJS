@@ -67,3 +67,7 @@ skills-lock.json
 
 # Generated Arcjet documentation guides
 ARCJET_*.md
+
+/src/generated/prisma
+
+docs
