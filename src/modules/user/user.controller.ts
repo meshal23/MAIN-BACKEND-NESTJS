@@ -10,11 +10,7 @@ export class UserController {
   @Roles(['ADMIN'])
   async getAllUsers() {
     const users = await this.userService.getAllUsers();
-    return {
-      status: 'success',
-      data: users,
-      count: users.length,
-    };
+    return users
   }
 
   @Get(':id')
