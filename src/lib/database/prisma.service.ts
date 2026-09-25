@@ -42,6 +42,13 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     return this.prisma.example;
   }
 
+  // Typed accessor for User model queries (e.g., this.prisma.user.findMany())
+  // Provides cleaner alternative to this.prisma.query('user')
+  // Note: Not currently used in UserService, kept for future convenience
+  get user() {
+    return this.prisma.user;
+  }
+
   get $transaction() {
     return this.prisma.$transaction.bind(this.prisma);
   }

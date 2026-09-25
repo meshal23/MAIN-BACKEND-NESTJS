@@ -6,9 +6,15 @@ import { PrismaModule } from './lib/database/prisma.module';
 import { ArcjetMiddleware } from './common/middleware/arcjet.middleware';
 import { auth } from './lib/auth';
 import { AuthModule } from '@thallesp/nestjs-better-auth';
+import { UserModule } from './modules/user/user.module';
 
 @Module({
-  imports: [PrismaModule, ArcjetModule, AuthModule.forRoot({ auth })],
+  imports: [
+    PrismaModule,
+    ArcjetModule,
+    AuthModule.forRoot({ auth }),
+    UserModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
