@@ -49,6 +49,10 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     return this.prisma.user;
   }
 
+  get hackathon() {
+    return this.prisma.hackathon;
+  }
+
   get $transaction() {
     return this.prisma.$transaction.bind(this.prisma);
   }

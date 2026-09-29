@@ -7,6 +7,7 @@ import { ArcjetMiddleware } from './common/middleware/arcjet.middleware';
 import { auth } from './lib/auth';
 import { AuthModule } from '@thallesp/nestjs-better-auth';
 import { UserModule } from './modules/user/user.module';
+import { HackathonModule } from './module/hackathon/hackathon.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { UserModule } from './modules/user/user.module';
     ArcjetModule,
     AuthModule.forRoot({ auth }),
     UserModule,
+    HackathonModule,
   ],
   controllers: [AppController],
   providers: [AppService],
