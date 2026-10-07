@@ -11,7 +11,7 @@ interface RateLimitRecord {
 export class ArcjetMiddleware implements NestMiddleware {
   private readonly logger = new Logger(ArcjetMiddleware.name);
   private rateLimitMap = new Map<string, RateLimitRecord>();
-  private readonly maxRequests = 10;
+  private readonly maxRequests = 20000;
   private readonly windowMs = 60 * 60 * 1000; // 1 hour
 
   constructor(private readonly arcjet: ArcjetService) {}
@@ -22,8 +22,11 @@ export class ArcjetMiddleware implements NestMiddleware {
 
     // For testing/development: use a fixed IP to track rate limits
     // For production: use the real client IP
-    if ((process.env.NODE_ENV !== 'production' || process.env.USE_TEST_IP === 'true') &&
-        (clientIp === '::1' || clientIp === '127.0.0.1' || !clientIp)) {
+    if (
+      (process.env.NODE_ENV !== 'production' ||
+        process.env.USE_TEST_IP === 'true') &&
+      (clientIp === '::1' || clientIp === '127.0.0.1' || !clientIp)
+    ) {
       clientIp = '192.0.2.1'; // Test IP for localhost
       this.logger.debug('Using test IP for rate limit tracking');
     } else {
@@ -36,7 +39,9 @@ export class ArcjetMiddleware implements NestMiddleware {
         '127.0.0.1';
     }
 
-    this.logger.debug(`Request from IP: ${clientIp}, Path: ${req.path}, Env: ${process.env.NODE_ENV}`);
+    this.logger.debug(
+      `Request from IP: ${clientIp}, Path: ${req.path}, Env: ${process.env.NODE_ENV}`,
+    );
 
     // Check in-memory rate limit first
     const now = Date.now();
@@ -44,10 +49,14 @@ export class ArcjetMiddleware implements NestMiddleware {
 
     if (record && now < record.resetTime) {
       record.count++;
-      this.logger.debug(`Rate limit - IP: ${clientIp}, Count: ${record.count}/${this.maxRequests}`);
+      this.logger.debug(
+        `Rate limit - IP: ${clientIp}, Count: ${record.count}/${this.maxRequests}`,
+      );
 
       if (record.count > this.maxRequests) {
-        this.logger.warn(`Rate limit exceeded for ${clientIp}: ${record.count}/${this.maxRequests}`);
+        this.logger.warn(
+          `Rate limit exceeded for ${clientIp}: ${record.count}/${this.maxRequests}`,
+        );
         res.status(429);
         return res.json({
           statusCode: 429,

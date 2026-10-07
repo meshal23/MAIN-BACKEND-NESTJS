@@ -8,31 +8,22 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  schemas  = ["auth", "org_verification", "ehr", "campaigns", "audit", "public", "org_roles"]
 }
 
-// Example model - remove or replace as needed
-
-model Example {
-  id        Int      @id @default(autoincrement())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-enum Role {
-  ADMIN
-  PARTICIPANT
-}
+// ============================================================================
+// AUTH SCHEMA — better-auth models
+// ============================================================================
 
 model User {
   id            String    @id
-  name          String
-  email         String
+  name          String?
+  email         String    @unique
   emailVerified Boolean   @default(false)
   image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  role          Role      @default(PARTICIPANT)
+  role          String    @default("PARTICIPANT")
   sessions      Session[]
   accounts      Account[]
 
@@ -40,26 +31,30 @@ model User {
   banReason  String?
   banExpires DateTime?
 
-  @@unique([email])
+  members     Member[]
+  invitations Invitation[]
+
   @@map("user")
+  @@schema("auth")
 }
 
 model Session {
   id        String   @id
   expiresAt DateTime
-  token     String
+  token     String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   ipAddress String?
   userAgent String?
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  impersonatedBy String?
+  impersonatedBy       String?
+  activeOrganizationId String?
+  user                 User    @relation(fields: [userId], references: [id])
 
-  @@unique([token])
   @@index([userId])
   @@map("session")
+  @@schema("auth")
 }
 
 model Account {
@@ -67,7 +62,6 @@ model Account {
   accountId             String
   providerId            String
   userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken           String?
   refreshToken          String?
   idToken               String?
@@ -77,9 +71,11 @@ model Account {
   password              String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@map("account")
+  @@schema("auth")
 }
 
 model Verification {
@@ -92,4 +88,240 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+  @@schema("auth")
+}
+
+model Organization {
+  id        String   @id
+  name      String
+  slug      String?  @unique
+  logo      String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members     Member[]
+  invitations Invitation[]
+
+  organizationroles OrganizationRole[]
+
+  @@index([slug])
+  @@map("organization")
+  @@schema("auth")
+}
+
+model Member {
+  id             String   @id
+  organizationId String
+  userId         String
+  role           String   @default("member")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("member")
+  @@schema("auth")
+  users User[]
+}
+
+model Invitation {
+  id             String   @id
+  organizationId String
+  email          String
+  role           String?  @default("member")
+  status         String   @default("pending") // pending | accepted | declined
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  inviterId String
+  user      User   @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@map("invitation")
+  @@schema("auth")
+  @@index([email])
+}
+
+model Team {
+  id             String   @id
+  organizationId String
+  name           String
+  slug           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  members TeamMember[]
+
+  @@index([organizationId])
+  @@map("team")
+  @@schema("auth")
+}
+
+model TeamMember {
+  id     String @id
+  teamId String
+  userId String
+  team   Team   @relation(fields: [teamId], references: [id])
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@map("team_member")
+  @@schema("auth")
+}
+
+// ============================================================================
+// ORG_VERIFICATION SCHEMA — Hospital/organizer verification domain
+// ============================================================================
+
+model HospitalProfile {
+  id                 String   @id @default(uuid())
+  organizationId     String   @unique
+  verificationStatus String   @default("pending") // pending | verified | flagged
+  trustScore         Int      @default(0)
+  licenseDocUrl      String?
+  address            String?
+  createdAt          DateTime @default(now())
+
+  @@schema("org_verification")
+}
+
+// ============================================================================
+// EHR SCHEMA — Electronic Health Records domain
+// ============================================================================
+
+model DoctorProfile {
+  id            String         @id @default(uuid())
+  userId        String         @unique
+  specialty     String
+  qrToken       String         @unique @default(uuid())
+  prescriptions Prescription[]
+  createdAt     DateTime       @default(now())
+
+  @@schema("ehr")
+}
+
+model PatientRecord {
+  id             String         @id @default(uuid())
+  patientUserId  String
+  hospitalOrgId  String
+  lastModifiedBy String?
+  lastModifiedAt DateTime?
+  data           Json
+  createdAt      DateTime       @default(now())
+  prescriptions  Prescription[]
+
+  @@index([patientUserId])
+  @@schema("ehr")
+}
+
+model Prescription {
+  id              String        @id @default(uuid())
+  patientRecordId String
+  patientRecord   PatientRecord @relation(fields: [patientRecordId], references: [id], onDelete: Cascade)
+  doctorProfileId String
+  doctor          DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  notes           String
+  createdAt       DateTime      @default(now())
+
+  @@index([patientRecordId])
+  @@index([doctorProfileId])
+  @@schema("ehr")
+}
+
+// ============================================================================
+// CAMPAIGNS SCHEMA — Blood donation campaigns domain
+// ============================================================================
+
+model DonorProfile {
+  id               String            @id @default(uuid())
+  userId           String            @unique
+  bloodType        String
+  lastDonationDate DateTime?
+  donations        DonationHistory[]
+
+  @@schema("campaigns")
+}
+
+model Campaign {
+  id             String            @id @default(uuid())
+  organizationId String
+  type           String // "blood_drive" | "free_clinic"
+  status         String            @default("draft") // draft | verified | live | completed
+  startDate      DateTime
+  donations      DonationHistory[]
+
+  @@index([organizationId])
+  @@schema("campaigns")
+}
+
+model DonationHistory {
+  id             String       @id @default(uuid())
+  donorProfileId String
+  donor          DonorProfile @relation(fields: [donorProfileId], references: [id], onDelete: Cascade)
+  campaignId     String?
+  campaign       Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  donatedAt      DateTime     @default(now())
+
+  @@index([donorProfileId])
+  @@index([campaignId])
+  @@schema("campaigns")
+}
+
+// ============================================================================
+// AUDIT SCHEMA — Audit logging domain
+// ============================================================================
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String
+  action      String
+  targetId    String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([targetId])
+  @@index([actorUserId])
+  @@schema("audit")
+}
+
+// ============================================================================
+// PUBLIC SCHEMA — Legacy/example models (optional cleanup)
+// ============================================================================
+
+model Example {
+  id        Int      @id @default(autoincrement())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@schema("public")
+}
+
+enum Role {
+  ADMIN
+  PARTICIPANT
+
+  @@schema("public")
+}
+
+model OrganizationRole {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           String
+  permission     String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime?    @updatedAt
+
+  @@index([organizationId])
+  @@index([role])
+  @@map("organizationRole")
+  @@schema("org_roles")
 }

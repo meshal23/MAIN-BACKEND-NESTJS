@@ -15,13 +15,15 @@ export class ArcjetService {
       rules: [
         // Local rate limiting: 10 requests per hour per IP
         fixedWindow({
-          max: 10,
+          max: 20000,
           window: '1h',
           characteristics: ['ip.src'],
         }),
       ],
     });
-    this.logger.log(`Arcjet initialized with key: ${process.env.ARCJET_KEY?.substring(0, 20)}...`);
+    this.logger.log(
+      `Arcjet initialized with key: ${process.env.ARCJET_KEY?.substring(0, 20)}...`,
+    );
     this.logger.log('Rate limit: 10 requests/hour per IP');
   }
 
@@ -42,7 +44,9 @@ export class ArcjetService {
         ipSrc: clientIp,
       });
 
-      this.logger.debug(`Decision: isDenied=${decision.isDenied()}, reason=${decision.reason}`);
+      this.logger.debug(
+        `Decision: isDenied=${decision.isDenied()}, reason=${decision.reason}`,
+      );
 
       if (decision.isDenied()) {
         this.logger.warn(`Request DENIED from ${clientIp}: ${decision.reason}`);
@@ -50,7 +54,8 @@ export class ArcjetService {
 
       return decision;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       this.logger.error(`Arcjet error: ${errorMessage}`, error);
       // Return allow decision on error
       return { isDenied: () => false, reason: 'error' };
