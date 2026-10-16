@@ -68,7 +68,7 @@ export const auth = betterAuth({
           organization: ['update'],
           member: ['create'],
           invitation: ['create'],
-          team: [],
+          team: [], 
           ac: ['read'],
         }),
         member: defaultAc.newRole({

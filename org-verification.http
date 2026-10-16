@@ -1,0 +1,320 @@
+### Org Verification Module - HTTP Test Collection
+
+# Variables
+@baseUrl = http://localhost:3000
+@contentType = application/json
+
+# Store session cookies for authenticated requests
+@sessionCookie =
+
+---
+
+### 1. Register a new user (setup for signup)
+POST {{baseUrl}}/api/auth/sign-up
+Content-Type: {{contentType}}
+
+{
+  "email": "hospital-admin@example.com",
+  "password": "SecurePassword123!",
+  "name": "Hospital Admin"
+}
+
+> {%
+  // Store the session from response headers
+  client.global.set('sessionCookie', response.headers.valueOfHeader('set-cookie'));
+%}
+
+---
+
+### 2. Sign up a new hospital organization
+POST {{baseUrl}}/organizations/signup
+Content-Type: {{contentType}}
+Cookie: {{sessionCookie}}
+
+{
+  "name": "Central Medical Hospital",
+  "slug": "central-medical-hospital",
+  "type": "hospital",
+  "address": "123 Medical Lane, Healthcare City, HC 12345",
+  "licenseDocUrl": "https://example.com/licenses/central-medical-hospital-license.pdf",
+  "metadata": "Founded in 1995, serves 50,000+ patients annually"
+}
+
+> {%
+  // Store the organization ID for later requests
+  if (response.status === 201) {
+    const data = response.body;
+    client.global.set('organizationId', data.organization.id);
+  }
+%}
+
+---
+
+### 3. Register a super_admin user (for review operations)
+POST {{baseUrl}}/api/auth/sign-up
+Content-Type: {{contentType}}
+
+{
+  "email": "super-admin@example.com",
+  "password": "AdminPassword123!",
+  "name": "Super Admin"
+}
+
+> {%
+  // Store the super admin session
+  client.global.set('superAdminSessionCookie', response.headers.valueOfHeader('set-cookie'));
+%}
+
+---
+
+### 4. Grant super_admin role to the admin user
+# Note: This would typically be done via a seeds script or internal admin API
+# For now, you'll need to manually set the role in the database or via an admin endpoint
+# UPDATE "auth"."user" SET role = 'super_admin' WHERE email = 'super-admin@example.com';
+
+---
+
+### 5. List pending organizations (super_admin only)
+GET {{baseUrl}}/organizations/pending
+Cookie: {{superAdminSessionCookie}}
+
+---
+
+### 6. Approve a hospital organization
+PATCH {{baseUrl}}/organizations/{{organizationId}}/review
+Content-Type: {{contentType}}
+Cookie: {{superAdminSessionCookie}}
+
+{
+  "decision": "approved",
+  "reason": "Documentation verified, facility meets all requirements"
+}
+
+---
+
+### 7. Get organization verification status (as organization member)
+GET {{baseUrl}}/organizations/{{organizationId}}/status
+Cookie: {{sessionCookie}}
+
+---
+
+### 8. Sign up a second hospital (for testing flagged state)
+POST {{baseUrl}}/organizations/signup
+Content-Type: {{contentType}}
+Cookie: {{sessionCookie}}
+
+{
+  "name": "Secondary Health Center",
+  "slug": "secondary-health-center",
+  "type": "hospital",
+  "address": "456 Care Avenue, Wellness District, WD 67890",
+  "licenseDocUrl": "https://example.com/licenses/secondary-health-center-license.pdf"
+}
+
+> {%
+  // Store the second organization ID
+  if (response.status === 201) {
+    const data = response.body;
+    client.global.set('organizationId2', data.organization.id);
+  }
+%}
+
+---
+
+### 9. Flag a hospital organization
+PATCH {{baseUrl}}/organizations/{{organizationId2}}/review
+Content-Type: {{contentType}}
+Cookie: {{superAdminSessionCookie}}
+
+{
+  "decision": "flagged",
+  "reason": "License documentation incomplete, requires resubmission"
+}
+
+---
+
+### 10. Try to approve an already-approved organization (idempotency test)
+PATCH {{baseUrl}}/organizations/{{organizationId}}/review
+Content-Type: {{contentType}}
+Cookie: {{superAdminSessionCookie}}
+
+{
+  "decision": "approved",
+  "reason": "Duplicate approval attempt"
+}
+
+# Expected: 409 Conflict - "Organization is already approved. Cannot re-process."
+
+---
+
+### 11. Get status of flagged organization (as member)
+GET {{baseUrl}}/organizations/{{organizationId2}}/status
+Cookie: {{sessionCookie}}
+
+---
+
+### 12. Test invalid input - missing required field
+POST {{baseUrl}}/organizations/signup
+Content-Type: {{contentType}}
+Cookie: {{sessionCookie}}
+
+{
+  "name": "Incomplete Hospital",
+  "slug": "incomplete-hospital"
+  # Missing: type, address, licenseDocUrl
+}
+
+# Expected: 400 Bad Request - validation error
+
+---
+
+### 13. Test invalid input - invalid type
+POST {{baseUrl}}/organizations/signup
+Content-Type: {{contentType}}
+Cookie: {{sessionCookie}}
+
+{
+  "name": "Invalid Type Hospital",
+  "slug": "invalid-type-hospital",
+  "type": "invalid_type",
+  "address": "123 Main St",
+  "licenseDocUrl": "https://example.com/license.pdf"
+}
+
+# Expected: 400 Bad Request - "type must be one of: hospital, campaign_organizer"
+
+---
+
+### 14. Test invalid input - invalid URL
+POST {{baseUrl}}/organizations/signup
+Content-Type: {{contentType}}
+Cookie: {{sessionCookie}}
+
+{
+  "name": "Invalid URL Hospital",
+  "slug": "invalid-url-hospital",
+  "type": "hospital",
+  "address": "123 Main St",
+  "licenseDocUrl": "not-a-valid-url"
+}
+
+# Expected: 400 Bad Request - "licenseDocUrl must be a URL"
+
+---
+
+### 15. Test duplicate slug conflict
+POST {{baseUrl}}/organizations/signup
+Content-Type: {{contentType}}
+Cookie: {{sessionCookie}}
+
+{
+  "name": "Different Hospital Name",
+  "slug": "central-medical-hospital",
+  "type": "hospital",
+  "address": "789 Different St",
+  "licenseDocUrl": "https://example.com/license2.pdf"
+}
+
+# Expected: 409 Conflict - "Organization slug 'central-medical-hospital' already exists"
+
+---
+
+### 16. Test unauthorized access - list pending without super_admin role
+GET {{baseUrl}}/organizations/pending
+Cookie: {{sessionCookie}}
+
+# Expected: 403 Forbidden - User must have super_admin role
+
+---
+
+### 17. Test unauthorized access - review without super_admin role
+PATCH {{baseUrl}}/organizations/{{organizationId}}/review
+Content-Type: {{contentType}}
+Cookie: {{sessionCookie}}
+
+{
+  "decision": "approved"
+}
+
+# Expected: 403 Forbidden - User must have super_admin role
+
+---
+
+### 18. Test access to status endpoint as non-member
+# First, create another user account
+POST {{baseUrl}}/api/auth/sign-up
+Content-Type: {{contentType}}
+
+{
+  "email": "unrelated-user@example.com",
+  "password": "Password123!",
+  "name": "Unrelated User"
+}
+
+> {%
+  client.global.set('unrelatedUserCookie', response.headers.valueOfHeader('set-cookie'));
+%}
+
+---
+
+### 19. Attempt status check as non-member (should be forbidden)
+GET {{baseUrl}}/organizations/{{organizationId}}/status
+Cookie: {{unrelatedUserCookie}}
+
+# Expected: 403 Forbidden - User must be a member of this organization
+
+---
+
+### 20. Test campaign_organizer type signup
+POST {{baseUrl}}/organizations/signup
+Content-Type: {{contentType}}
+Cookie: {{sessionCookie}}
+
+{
+  "name": "Red Cross Blood Drive 2026",
+  "slug": "red-cross-blood-drive-2026",
+  "type": "campaign_organizer",
+  "address": "321 Community Center, Blood Drive City, BD 54321",
+  "licenseDocUrl": "https://example.com/licenses/red-cross-registration.pdf"
+}
+
+---
+
+### Test Flow Summary
+
+# Workflow for manual testing:
+# 1. Create hospital-admin user (request #1) - get sessionCookie
+# 2. Sign up hospital organization (request #2) - get organizationId
+# 3. Create super-admin user (request #3) - get superAdminSessionCookie
+# 4. Manually grant super_admin role in database
+# 5. List pending (request #5)
+# 6. Approve organization (request #6)
+# 7. Get status as member (request #7)
+# 8. Sign up second hospital (request #8) - get organizationId2
+# 9. Flag second organization (request #9)
+# 10. Test idempotency (request #10)
+# 11. Test validation errors (requests #12-15)
+# 12. Test authorization (requests #16-17)
+# 13. Test campaign organizer type (request #20)
+
+---
+
+### Notes
+
+# For Thunder Client users:
+# 1. Import this file as a REST API collection
+# 2. The @ variables will be stored in collection-level environment variables
+# 3. Use the > blocks to execute tests and set variables
+
+# For Postman users:
+# Convert this to Postman collection format (JSON) and import
+# Postman script examples provided below for reference
+
+# For curl users:
+# Extract individual requests and convert to curl format as needed
+
+# Database setup for testing:
+# 1. Ensure migrations are applied: npx prisma migrate deploy
+# 2. Optional: Seed database with test data using prisma/seed.ts
+# 3. For super_admin role, manually update:
+#    UPDATE "auth"."user" SET role = 'super_admin' WHERE email = 'super-admin@example.com';

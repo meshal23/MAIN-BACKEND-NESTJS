@@ -42,6 +42,78 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     return this.prisma.example;
   }
 
+  get user() {
+    return this.prisma.user;
+  }
+
+  get session() {
+    return this.prisma.session;
+  }
+
+  get account() {
+    return this.prisma.account;
+  }
+
+  get verification() {
+    return this.prisma.verification;
+  }
+
+  get organization() {
+    return this.prisma.organization;
+  }
+
+  get member() {
+    return this.prisma.member;
+  }
+
+  get invitation() {
+    return this.prisma.invitation;
+  }
+
+  get team() {
+    return this.prisma.team;
+  }
+
+  get teamMember() {
+    return this.prisma.teamMember;
+  }
+
+  get hospitalProfile() {
+    return this.prisma.hospitalProfile;
+  }
+
+  get doctorProfile() {
+    return this.prisma.doctorProfile;
+  }
+
+  get patientRecord() {
+    return this.prisma.patientRecord;
+  }
+
+  get prescription() {
+    return this.prisma.prescription;
+  }
+
+  get donorProfile() {
+    return this.prisma.donorProfile;
+  }
+
+  get campaign() {
+    return this.prisma.campaign;
+  }
+
+  get donationHistory() {
+    return this.prisma.donationHistory;
+  }
+
+  get auditLog() {
+    return this.prisma.auditLog;
+  }
+
+  get organizationRole() {
+    return this.prisma.organizationRole;
+  }
+
   get $transaction() {
     return this.prisma.$transaction.bind(this.prisma);
   }
